@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claimsforce Makro – Sparkasse + LAS-Standard (VHV)
 // @namespace    claimsforce-makro
-// @version      3.8
+// @version      3.9
 // @description  Füllt Berichte per Knopfdruck aus: "Bericht Sparkassenversicherung" (inkl. Stundenabrechnung) oder LAS-Standard (inkl. Kalkulation)
 // @match        https://web.claimsforce.com/*
 // @grant        none
@@ -508,21 +508,32 @@
   const MONATE = { januar: 1, februar: 2, 'märz': 3, maerz: 3, april: 4, mai: 5, juni: 6, juli: 7,
     august: 8, september: 9, oktober: 10, november: 11, dezember: 12 };
 
+  // Neuester Verlaufseintrag "Termin hinzugefügt" (alt: "Termin wurde hinzugefügt,")
+  //   ueber = Datum, an dem der Termin eingetragen wurde ("Name · 28.10.2026, 14:20" bzw. "Name - 26.10.2026, 09:32")
+  //   unter = der Termin selbst ("Montag, 2. November 2026 um 10:15") als Zahl
   function verlaufDaten() {
-    const el = textKnotenEnthaelt(/Termin wurde hinzugef/);
-    if (!el) return null;
-    let c = el, ueber = null;
-    for (let i = 0; i < 5 && c && !ueber; i++) {
-      c = c.parentElement;
-      const m = c.innerText.match(/-\s*(\d{2}\.\d{2}\.\d{4}),\s*\d{1,2}:\d{2}/);
-      if (m && c.innerText.indexOf(m[0]) < c.innerText.indexOf('Termin wurde')) ueber = m[1];
+    const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    let n, titel = null;
+    while ((n = w.nextNode())) {
+      if (/Termin (wurde )?hinzugef/.test(n.textContent) && n.parentElement.getClientRects().length) { titel = n.parentElement; break; }
     }
-    const txt = el.innerText + ' ' + (el.parentElement ? el.parentElement.innerText : '');
-    const t = txt.match(/(\d{1,2})\.\s*([A-Za-zäöüÄÖÜ]+)\s+(\d{4})/);
-    const unter = t && MONATE[t[2].toLowerCase()]
-      ? String(t[1]).padStart(2, '0') + '.' + String(MONATE[t[2].toLowerCase()]).padStart(2, '0') + '.' + t[3]
+    if (!titel) return null;
+    // Eintrag = kleinster Block um die Überschrift, der beide Daten enthält, aber nur EIN Verlaufs-Ereignis
+    let e = titel, eintrag = null;
+    for (let i = 0; i < 8 && e; i++) {
+      e = e.parentElement;
+      const t = (e && e.innerText) || '';
+      if ((t.match(/hinzugef|gesendet|angenommen|zugewiesen|beauftragt|angelegt/g) || []).length > 1) break;
+      if (/\d{2}\.\d{2}\.\d{4},\s*\d{1,2}:\d{2}/.test(t) && /\d{1,2}\.\s*[A-Za-zäöüÄÖÜ]+\s+\d{4}/.test(t)) { eintrag = e; break; }
+    }
+    if (!eintrag) return null;
+    const t = eintrag.innerText;
+    const m = t.match(/(\d{2}\.\d{2}\.\d{4}),\s*\d{1,2}:\d{2}/);
+    const l = t.match(/(\d{1,2})\.\s*([A-Za-zäöüÄÖÜ]+)\s+(\d{4})/);
+    const unter = l && MONATE[l[2].toLowerCase()]
+      ? String(l[1]).padStart(2, '0') + '.' + String(MONATE[l[2].toLowerCase()]).padStart(2, '0') + '.' + l[3]
       : null;
-    return ueber && unter ? { ueber, unter } : null;
+    return m && unter ? { ueber: m[1], unter } : null;
   }
 
   /* ========================= ABLAUF A: SPARKASSE ========================= */
@@ -642,9 +653,14 @@
     klick(oeffnen.closest('button') || oeffnen);
     await warteAuf(() => /\/forms\//.test(location.pathname), 'Formularseite');
 
-    status('Lese Verlauf …');
-    await rechterReiter('Verlauf');
-    const v = await warteAuf(verlaufDaten, 'Termin im Verlauf');
+    // Verlauf öffnen – springt der rechte Bereich zurück auf "Details", bis zu 3× neu öffnen
+    let v = null;
+    for (let versuch = 1; versuch <= 3 && !v; versuch++) {
+      status('Lese Verlauf …' + (versuch > 1 ? ' (Versuch ' + versuch + ')' : ''));
+      await rechterReiter('Verlauf');
+      v = await warteAuf(verlaufDaten, 'Termin im Verlauf', 6000).catch(() => null);
+    }
+    if (!v) throw new Error('Kein "Termin hinzugefügt" im Verlauf gefunden');
 
     status('Fülle Stundenabrechnung …');
     const fm = await warteAuf(pdfFelder, 'PDF-Formular', 30000);
