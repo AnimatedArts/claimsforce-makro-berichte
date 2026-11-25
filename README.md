@@ -19,8 +19,12 @@ Tampermonkey-Skript, das auf **web.claimsforce.com** Berichte per Knopfdruck aus
 
 ## Aktualisieren
 
-Tampermonkey sucht **von selbst** nach neuen Versionen. Sofort aktualisieren:
-Tampermonkey-Symbol in Chrome anklicken → **„Nach Userscript-Updates suchen“** → Claimsforce-Seite neu laden (F5).
+Neben **„▶ Makro starten“** steht ein kleiner Button mit der installierten Version (z. B. **„⟳ v3.10“**).
+Gibt es eine neuere Version, wird er **blau** und zeigt **„⟳ Update auf v…“** an.
+
+**Aktualisieren:** auf diesen Button klicken → in Tampermonkey **„Aktualisieren“** klicken → Claimsforce-Seite neu laden (F5).
+
+Tampermonkey sucht außerdem von selbst etwa einmal am Tag nach neuen Versionen.
 
 ## Benutzen
 

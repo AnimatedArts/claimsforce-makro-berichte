@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Claimsforce Makro – Sparkasse + LAS-Standard (VHV)
 // @namespace    claimsforce-makro
-// @version      3.9
+// @version      3.10
 // @description  Füllt Berichte per Knopfdruck aus: "Bericht Sparkassenversicherung" (inkl. Stundenabrechnung) oder LAS-Standard (inkl. Kalkulation)
 // @match        https://web.claimsforce.com/*
 // @grant        none
@@ -808,8 +808,45 @@
         laeuft = false; btn.disabled = false; btn.style.opacity = '1';
       }
     });
-    panel.append(statusEl, btn);
+    // Update-Button: zeigt die installierte Version, prüft GitHub auf eine neuere und öffnet per Klick das Tampermonkey-Update
+    const upd = document.createElement('button');
+    upd.textContent = '⟳ v' + MEINE_VERSION;
+    upd.title = 'Auf Updates prüfen / aktualisieren';
+    upd.style.cssText = 'background:#fff;color:#555;border:1px solid #ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;';
+    upd.addEventListener('click', () => window.open(UPDATE_URL, '_blank'));
+    const zeile = document.createElement('div');
+    zeile.style.cssText = 'display:flex;align-items:center;gap:8px;';
+    zeile.append(btn, upd);
+    panel.append(statusEl, zeile);
     document.body.appendChild(panel);
+    pruefeUpdate(upd);
+  }
+
+  /* ------------------------------ Updates ------------------------------ */
+  const UPDATE_URL = 'https://raw.githubusercontent.com/AnimatedArts/claimsforce-makro-berichte/main/claimsforce-makro.user.js';
+  const MEINE_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '3.10';
+  let neuesteVersion = null;
+
+  function versionNeuer(a, b) { // ist a neuer als b?
+    const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+      if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+    }
+    return false;
+  }
+
+  async function pruefeUpdate(upd) {
+    try {
+      if (!neuesteVersion) {
+        const text = await (await fetch(UPDATE_URL + '?t=' + Date.now(), { cache: 'no-store' })).text();
+        const m = text.match(/@version\s+([\d.]+)/);
+        neuesteVersion = m ? m[1] : MEINE_VERSION;
+      }
+      if (versionNeuer(neuesteVersion, MEINE_VERSION)) {
+        upd.textContent = '⟳ Update auf v' + neuesteVersion;
+        upd.style.cssText = 'background:#1a73e8;color:#fff;border:none;padding:6px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:bold;';
+      }
+    } catch (e) { /* offline o. ä. – Button bleibt trotzdem klickbar */ }
   }
 
   setInterval(() => {
